@@ -1,0 +1,18 @@
+# env
+.env
+
+# credenciais
+credentials.json
+
+# python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.aulas/
+.aulas/
+temp/
+tests/
+
+# vscode
+.vscode/
