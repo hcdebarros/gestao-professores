@@ -18,31 +18,44 @@ class AIService:
         dia_semana = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"][agora.weekday()]
         
         prompt_sistema = f"""
-        Você é um assistente de gestão financeira de aulas particulares.
+        Você é um assistente de gestão de aulas particulares e agenda.
         Sua resposta deve ser ESTRITAMENTE um objeto JSON válido.
         
         CONTEXTO TEMPORAL:
         - Hoje é {dia_semana}, {data_hoje}.
         - Se o usuário disser "hoje", use {data_hoje}.
-        - Se o usuário disser "ontem", calcule a data correta baseada em {data_hoje}.
-        - Para as intenções "faturamento" ou "listar_aulas", se o mês/ano não forem ditos, use o mês/ano de {data_hoje}.
+        - Se o usuário disser "amanhã", calcule a data correta baseada em {data_hoje}.
+        - Se o usuário disser "semana que vem", calcule a data correta baseada em {data_hoje}.
 
         IDENTIFIQUE A INTENÇÃO:
         1. "configurar": Definir valor/hora do aluno (ex: 'Bruno 100 reais').
-        2. "aula": Registrar aula dada (ex: 'Aula com Bruno hoje 2h').
-        3. "faturamento": Somar quanto vai receber no mês (ex: 'Quanto recebo do Bruno em outubro?').
-        4. "listar_aulas": Listar os dias de aula (ex: 'Quais dias dei aula para o Bruno mês passado?').
+        2. "aula": Registrar aula que JÁ OCORREU no passado ou hoje para fins financeiros (Sheets).
+        3. "faturamento": Consultar ganhos (ex: 'Quanto recebo do Bruno em outubro?').
+        4. "listar_aulas": Listar datas de aulas dadas.
+        5. "agendar_fixo": Agendar aula FUTURA na agenda (Calendar). Pode ser única ou recorrente.
+        6. "cancelar": Remover aula(s) da agenda (Calendar).
+
+        REGRAS DE EXTRAÇÃO:
+        - "agendar_fixo": 
+            - Se for recorrente (ex: 'toda segunda'), preencha 'dia_semana' (MO, TU, WE, TH, FR, SA, SU) e deixe 'data' nulo.
+            - Se for data específica (ex: 'dia 7'), preencha 'data' (DD/MM/YYYY) e deixe 'dia_semana' nulo.
+            - Sempre tente extrair 'horario' (HH:MM). Se não houver, use "14:00".
+            - Se a duração não for dita, use 'horas': 1.0.
+        - "cancelar":
+            - Identifique o nome do aluno. Se o usuário disser "cancelar todas", "tudo" ou usar o plural, a intenção é "cancelar".
 
         FORMATO DE RETORNO (JSON):
         {{
-            "intencao": "configurar" | "aula" | "faturamento" | "listar_aulas",
+            "intencao": "configurar" | "aula" | "faturamento" | "listar_aulas" | "agendar_fixo" | "cancelar",
             "dados": {{
-                "nome": "string (nome do aluno)",
+                "nome": "string",
                 "valor_hora": float,
-                "data": "DD/MM/YYYY",
+                "data": "DD/MM/YYYY" | null,
+                "horario": "HH:MM",
                 "horas": float,
-                "mes": integer (1-12),
-                "ano": integer (ex: 2026)
+                "dia_semana": "MO" | "TU" | "WE" | "TH" | "FR" | "SA" | "SU" | null,
+                "mes": integer,
+                "ano": integer
             }}
         }}
         """

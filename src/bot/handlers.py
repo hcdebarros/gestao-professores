@@ -1,14 +1,16 @@
 import os
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import ContextTypes
 from src.services.sheets_service import SheetsService
+from src.services.calendar_service import CalendarService
 from src.services.ai_service import AIService
 
 # Inicialização dos serviços
 sheets = SheetsService("aulas")
 ai_assistant = AIService()
+calendar = CalendarService()
 load_dotenv()
 
 MEU_ID = int(os.getenv("MEU_ID_TELEGRAM", 0))
@@ -206,6 +208,76 @@ async def processar_texto_e_salvar(texto, update, context):
                     f"✅ {len(aulas)} sessões registradas."
                 )
         
+        # --- CASO 5: AGENDAR NA AGENDA (FIXO OU ÚNICO) ---
+        elif intencao == "agendar_fixo":
+            nome = dados.get("nome", "Aluno").strip().title()
+            dia_cod = dados.get("dia_semana") # MO, TU, etc. (Vem se for recorrente)
+            data_str = dados.get("data")      # DD/MM/YYYY (Vem se for aula única)
+            horario_raw = str(dados.get("horario", "14:00")).lower()
+            
+            valor_duracao = dados.get("horas") or dados.get("duracao")
+            duracao = float(valor_duracao) if valor_duracao is not None else 1.0
+            
+            try:
+                # 1. Normalização do Horário
+                horario_limpo = horario_raw.replace("horas", "").replace("h", "").strip()
+                hora_f, min_f = (map(int, horario_limpo.split(':')) if ":" in horario_limpo else (int(horario_limpo), 0))
+
+                # 2. Define a Data de Início
+                if data_str:
+                    # Aula única: usa a data que você falou
+                    data_base = datetime.strptime(data_str, "%d/%m/%Y")
+                elif dia_cod:
+                    # Aula recorrente: Precisamos encontrar a PRÓXIMA ocorrência desse dia
+                    dias_map = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
+                    dia_alvo = dias_map[dia_cod]
+                    
+                    agora = datetime.now()
+                    hoje_dia_semana = agora.weekday() # 0=Segunda, 2=Quarta...
+                    
+                    # Calcula quantos dias faltam para o próximo dia escolhido
+                    dias_para_frente = (dia_alvo - hoje_dia_semana) % 7
+                    
+                    # Se o dia escolhido for HOJE, mas o horário já passou, pula para a semana que vem
+                    # (Opcional, mas evita criar evento no passado do mesmo dia)
+                    data_base = agora + timedelta(days=dias_para_frente)
+                else:
+                    data_base = datetime.now()
+
+                data_inicio = data_base.replace(hour=hora_f, minute=min_f, second=0, microsecond=0)
+                
+                # 3. CHAMADA INTELIGENTE:
+                # Se 'dia_cod' existir, é recorrente. Se não, é aula única (recorrencia=None)
+                link = calendar.agendar_aula(nome, data_inicio, duracao, recorrencia=dia_cod)
+                
+                if link:
+                    tipo_msg = f"🔁 Toda {dia_cod}" if dia_cod else f"📍 Dia {data_inicio.strftime('%d/%m')}"
+                    await update.message.reply_text(
+                        f"🗓️ **Evento Criado na Agenda!**\n"
+                        f"👤 Aluno: {nome}\n"
+                        f"📅 {tipo_msg}\n"
+                        f"⏰ Às {hora_f:02d}:{min_f:02d}\n\n"
+                        f"🔗 [Ver na Agenda]({link})",
+                        parse_mode="Markdown"
+                    )
+                else:
+                    await update.message.reply_text("❌ Erro ao agendar no Google Calendar.")
+            
+            except Exception as e:
+                await update.message.reply_text(f"❌ Erro ao processar o agendamento: {e}")
+
+        # --- CASO 6: CANCELAR AULA ---
+        elif intencao == "cancelar":
+            nome = dados.get("nome", "Aluno").strip().title()
+            # Verifica se a IA identificou que é para apagar tudo (ajuste o prompt para isso)
+            apagar_tudo = "todas" in texto.lower() or "tudo" in texto.lower()
+            
+            data_str = dados.get("data")
+            data_obj = datetime.strptime(data_str, "%d/%m/%Y") if data_str else datetime.now()
+
+            sucesso, mensagem = calendar.cancelar_aula(nome, data_obj, todas=apagar_tudo)
+            await update.message.reply_text(f"{'🗑️' if sucesso else '⚠️'} {mensagem}")
+
     except Exception as e:
         print(f"❌ ERRO CRÍTICO no processar_texto_e_salvar: {e}")
         await update.message.reply_text(f"❌ Ocorreu um erro interno: {e}")
