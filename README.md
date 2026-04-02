@@ -36,15 +36,15 @@ Bot para Telegram desenvolvido para facilitar a gestão de aulas particulares. A
 
 **Registrando um aluno e agendando aula recorrente:**
 
-![Demo 1](docs/demo1.png)
+![Demo 1](docs/demo1.webp)
 
 **Registrando aulas e consultando histórico:**
 
-![Demo 2](docs/demo2.png)
+![Demo 2](docs/demo2.webp)
 
 **Desmarcando uma aula:**
 
-![Demo 3](docs/demo3.png)
+![Demo 3](docs/demo3.webp)
 
 ---
 ---
